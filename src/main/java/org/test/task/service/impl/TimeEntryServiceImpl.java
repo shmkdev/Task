@@ -3,6 +3,7 @@ package org.test.task.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.test.task.dto.TimeEntryDto;
 import org.test.task.entity.TimeEntry;
 import org.test.task.repository.TimeEntryRepository;
@@ -20,6 +21,7 @@ public class TimeEntryServiceImpl implements TimeEntryService {
     private final ConcurrentLinkedQueue<TimeEntry> queue = new ConcurrentLinkedQueue<>();
 
     @Override
+    @Transactional(readOnly = true)
     public List<TimeEntryDto> findAllEntries() {
         return repository.findAllByOrderByIdAsc()
                 .stream()
@@ -32,26 +34,18 @@ public class TimeEntryServiceImpl implements TimeEntryService {
     @Override
     public void addTimeEntry() {
         TimeEntry timeEntry = new TimeEntry();
-        try {
-            repository.save(timeEntry);
-            log.info("Save timestamp to DB: {}", timeEntry.getTimestamp());
-        } catch (Exception e) {
-            queue.add(timeEntry);
-            log.error("Failed to save timeEntry to DB: {}, add timeEntry to queue", timeEntry, e);
-        }
+        queue.add(timeEntry);
+        log.info("Saved timeEntry to Queue: {}", timeEntry);
     }
 
 
     @Override
+    @Transactional
     public void processQueue() {
-        while (!queue.isEmpty()) {
-            try {
-                repository.saveAll(queue);
-                log.info("Saved timeEntry to DB: {}", queue);
-            } catch (Exception e) {
-                log.error("Failed to save timeEntry to DB: {}", queue, e);
-                break;
-            }
+        if (!queue.isEmpty()) {
+            repository.saveAll(queue);
+            log.info("Saved timeEntry batch to DB: {}", queue);
         }
     }
 }
+
